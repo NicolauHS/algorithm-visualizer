@@ -37,7 +37,7 @@ export class BarChart {
       .append("svg")
       .attr("width", "100%")
       .attr("height", "100%")
-      .attr("class", "bg-gray-900 rounded-2xl pt-4 px-2 pb-0 box-content");
+      .attr("class", "bg-blue-950");
 
     // Scales
     this.xScale = d3
@@ -124,9 +124,12 @@ export class BarChart {
     const skipHighlights = this.data.length > 500;
 
     // Fisher-Yates Shuffle Algorithm
-    for (let i = this.data.length - 1; i > 0; i--) {
+    for (let i = this.data.length - 1; i >= 0; i--) {
+      const currentValue = this.data[i];
+
       if (!skipHighlights) {
-        this.highlight(i);
+        this.highlightValue(currentValue);
+        await new Promise((resolve) => setTimeout(resolve, 10));
       }
 
       // Generate random index and swap
@@ -137,13 +140,14 @@ export class BarChart {
 
       barsSelection
         .data(this.data, (d) => d.toString())
+        .attr("data-value", (d) => d)
         .attr("x", (d) => this.xScale(d)!)
         .attr("y", (d) => this.yScale(d))
         .attr("height", (d) => this.height - this.yScale(d));
 
       if (this.soundPlayer && this.data.length <= 200) {
         const frequency = this.soundPlayer.mapValueToFrequency(
-          this.data[i],
+          currentValue,
           minValue,
           maxValue
         );
@@ -151,7 +155,7 @@ export class BarChart {
       }
 
       if (!skipHighlights) {
-        this.unhighlight(i);
+        this.unhighlightValue(currentValue);
       }
 
       const delay =
@@ -172,31 +176,16 @@ export class BarChart {
     }
   }
 
-  /**
-   * Highlight a bar at the specified index with a different color
-   * @param index - The index of the bar to highlight
-   * @param color - Optional custom highlight color
-   */
-  highlight(index: number, color: string = this.HIGHLIGHT_COLOR) {
-    if (index < 0 || index >= this.data.length) return;
-
-    const value = this.data[index];
+  highlightValue(value: number) {
     this.highlightedBars.add(value);
 
     const bar = this.svg.select(`rect[data-value="${value}"]`);
     if (!bar.empty()) {
-      bar.attr("fill", color);
+      bar.attr("fill", this.HIGHLIGHT_COLOR);
     }
   }
 
-  /**
-   * Unhighlight a bar at the specified index (return to default color)
-   * @param index - The index of the bar to unhighlight
-   */
-  unhighlight(index: number) {
-    if (index < 0 || index >= this.data.length) return;
-
-    const value = this.data[index];
+  unhighlightValue(value: number) {
     this.highlightedBars.delete(value);
 
     const bar = this.svg.select(`rect[data-value="${value}"]`);
