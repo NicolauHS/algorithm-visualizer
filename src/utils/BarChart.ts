@@ -2,7 +2,7 @@ import * as d3 from "d3";
 import { SoundPlayer } from "./SoundPlayer";
 
 export class BarChart {
-  private svg: d3.Selection<SVGSVGElement, unknown, HTMLElement, any>;
+  private svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>;
   private container: d3.Selection<HTMLElement, unknown, HTMLElement, any>;
   private width: number;
   private height: number;
@@ -18,28 +18,35 @@ export class BarChart {
   private readonly DEFAULT_COLOR = "#4A90E2"; // Original bar color
   private readonly HIGHLIGHT_COLOR = "#FF5733"; // Highlighted bar color (orange-red)
 
+  // Add margin property
+  private margin = { top: 20, right: 20, bottom: 20, left: 20 };
+
   constructor(selector: string, enableSound: boolean = false) {
     // Select the container element
     this.container = d3.select<HTMLElement, unknown>(selector);
 
     // Get initial dimensions from the container
     const containerNode = this.container.node() as HTMLElement;
-    this.width = containerNode.clientWidth;
-    this.height = containerNode.clientHeight;
+    this.width =
+      containerNode.clientWidth - this.margin.left - this.margin.right;
+    this.height =
+      containerNode.clientHeight - this.margin.top - this.margin.bottom;
 
     // Initialize sound player if enabled
     if (enableSound) {
       this.soundPlayer = new SoundPlayer();
     }
 
-    // SVG container
+    // SVG container with proper dimensions
     this.svg = this.container
       .append("svg")
       .attr("width", "100%")
       .attr("height", "100%")
-      .attr("class", "bg-blue-950");
+      .attr("class", "bg-blue-950")
+      .append("g") // Add a group element for proper transformation
+      .attr("transform", `translate(${this.margin.left},${this.margin.top})`);
 
-    // Scales
+    // Scales - adjusted to account for margins
     this.xScale = d3
       .scaleBand<number>()
       .domain([])
@@ -65,8 +72,10 @@ export class BarChart {
 
   resize() {
     const containerNode = this.container.node() as HTMLElement;
-    const newWidth = containerNode.clientWidth;
-    const newHeight = containerNode.clientHeight;
+    const newWidth =
+      containerNode.clientWidth - this.margin.left - this.margin.right;
+    const newHeight =
+      containerNode.clientHeight - this.margin.top - this.margin.bottom;
 
     // Update dimensions
     this.width = newWidth;
@@ -146,7 +155,7 @@ export class BarChart {
         .attr("height", (d) => this.height - this.yScale(d));
 
       if (this.soundPlayer && this.data.length <= 200) {
-        const frequency = this.soundPlayer.mapValueToFrequency(
+        const frequency = this.soundPlayer.valueToFrequency(
           currentValue,
           minValue,
           maxValue
@@ -176,7 +185,43 @@ export class BarChart {
     }
   }
 
-  highlightValue(value: number) {
+  getData(): number[] {
+    return [...this.data];
+  }
+
+  async swap(i: number, j: number) {
+    if (i < 0 || i >= this.data.length || j < 0 || j >= this.data.length) {
+      return;
+    }
+
+    const minValue = Math.min(...this.data);
+    const maxValue = Math.max(...this.data);
+    const valueBeingMoved = this.data[j];
+
+    [this.data[i], this.data[j]] = [this.data[j], this.data[i]];
+
+    this.xScale.domain(this.data);
+
+    const barsSelection = this.svg.selectAll<SVGRectElement, number>("rect");
+
+    barsSelection
+      .data(this.data, (d) => d.toString())
+      .attr("data-value", (d) => d)
+      .attr("x", (d) => this.xScale(d)!)
+      .attr("y", (d) => this.yScale(d))
+      .attr("height", (d) => this.height - this.yScale(d));
+
+    if (this.soundPlayer && this.data.length <= 200) {
+      const frequency = this.soundPlayer.valueToFrequency(
+        valueBeingMoved,
+        minValue,
+        maxValue
+      );
+      this.soundPlayer.play(frequency);
+    }
+  }
+
+  highlightValue(value: number, color: string = this.HIGHLIGHT_COLOR) {
     this.highlightedBars.add(value);
 
     const bar = this.svg.select(`rect[data-value="${value}"]`);
@@ -192,5 +237,34 @@ export class BarChart {
     if (!bar.empty()) {
       bar.attr("fill", this.DEFAULT_COLOR);
     }
+  }
+
+  async verifySorted() {
+    const isSorted = this.data.every((val, i, arr) => !i || arr[i - 1] <= val);
+
+    const SUCCESS_COLOR = "#00FF00";
+
+    for (let i = 0; i < this.data.length; i++) {
+      this.highlightValue(this.data[i], SUCCESS_COLOR);
+
+      if (this.soundPlayer) {
+        const minValue = Math.min(...this.data);
+        const maxValue = Math.max(...this.data);
+        const frequency = this.soundPlayer.valueToFrequency(
+          this.data[i],
+          minValue,
+          maxValue
+        );
+        this.soundPlayer.play(frequency);
+      }
+
+      const delay =
+        this.data.length > 500 ? 2 : this.data.length > 200 ? 10 : 20;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+
+      this.unhighlightValue(this.data[i]);
+    }
+
+    return isSorted;
   }
 }
