@@ -1,57 +1,88 @@
-import { BarChart } from "../BarChart";
+import barChart from "../BarChart";
 
 const CURRENT_POSITION_COLOR = "#1E88E5"; // Blue
 const COMPARING_COLOR = "#FFC107"; // Yellow
-const MIN_ELEMENT_COLOR = "#4CAF50"; // Green
 const SORTED_COLOR = "#9C27B0"; // Purple
 
 export async function selectionSort(
-  chart: BarChart,
+  chart: ReturnType<typeof barChart>,
   options: {
     skipAnimation?: boolean;
     delay?: number;
   } = {}
 ) {
-  // Don't create a local copy - we'll always get fresh data
   const skipHighlights = options.skipAnimation || chart.getData().length > 500;
+  const skipSounds = chart.getData().length > 500; // Skip sounds for very large arrays
 
-  // Selection Sort Algorithm
+  const initialData = chart.getData();
+  const minValue = Math.min(...initialData);
+  const maxValue = Math.max(...initialData);
+
+  let comparisons = 0;
+
   for (let i = 0; i < chart.getData().length - 1; i++) {
-    // Always get fresh data from the chart
     const currentData = chart.getData();
 
+    const currentPosition = currentData.length - 1 - i;
+
     if (!skipHighlights) {
-      chart.highlightValue(currentData[i], CURRENT_POSITION_COLOR);
+      chart.highlightValue(
+        currentData[currentPosition],
+        CURRENT_POSITION_COLOR
+      );
+
+      // Play sound for current position
+      if (!skipSounds) {
+        const frequency = chart.playSound(
+          currentData[currentPosition],
+          minValue,
+          maxValue
+        );
+      }
+
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
 
-    // Find minimum element in the unsorted part
-    let minIndex = i;
+    // Find maximum element in the unsorted part
+    let maxIndex = currentPosition;
 
-    for (let j = i + 1; j < currentData.length; j++) {
+    // Loop from beginning up to currentPosition (inclusive)
+    for (let j = 0; j <= currentPosition; j++) {
       // Always get fresh data
       const comparisonData = chart.getData();
 
-      // Highlight element being compared
+      comparisons++;
+
       if (!skipHighlights) {
         chart.highlightValue(comparisonData[j], COMPARING_COLOR);
-        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        // Play sound for comparison element
+        if (!skipSounds) {
+          const frequency = chart.playSound(
+            comparisonData[j],
+            minValue,
+            maxValue
+          );
+        }
       }
 
-      if (comparisonData[j] < comparisonData[minIndex]) {
-        // Unhighlight previous minimum if there was one
-        if (!skipHighlights && minIndex !== i) {
-          chart.unhighlightValue(comparisonData[minIndex]);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      if (comparisonData[j] > comparisonData[maxIndex]) {
+        if (!skipHighlights && maxIndex !== currentPosition) {
+          chart.unhighlightValue(comparisonData[maxIndex]);
         }
 
-        minIndex = j;
+        maxIndex = j;
 
-        // Highlight new minimum
-        if (!skipHighlights) {
-          chart.highlightValue(comparisonData[minIndex], MIN_ELEMENT_COLOR);
+        if (!skipSounds) {
+          const frequency = chart.playSound(
+            comparisonData[maxIndex],
+            minValue,
+            maxValue
+          );
         }
       } else if (!skipHighlights) {
-        // Unhighlight compared element if it's not the minimum
         chart.unhighlightValue(comparisonData[j]);
       }
 
@@ -63,35 +94,39 @@ export async function selectionSort(
       }
     }
 
-    // Get final data for this iteration before swapping
     const swapData = chart.getData();
 
-    // Swap elements if needed
-    if (minIndex !== i) {
-      // Unhighlight before swapping to avoid issues with data-value attributes
+    if (maxIndex !== currentPosition) {
       if (!skipHighlights) {
-        chart.unhighlightValue(swapData[i]);
-        chart.unhighlightValue(swapData[minIndex]);
+        chart.unhighlightValue(swapData[currentPosition]);
+        chart.unhighlightValue(swapData[maxIndex]);
       }
 
-      // Swap and update the chart
-      await chart.swap(i, minIndex);
+      if (!skipSounds) {
+        const frequency = chart.playSound(
+          swapData[maxIndex],
+          minValue,
+          maxValue
+        );
+      }
+
+      // Swap elements
+      await chart.swap(maxIndex, currentPosition);
     }
 
     // Get updated data after the swap
     const updatedData = chart.getData();
 
-    // Highlight the element that's now in its final sorted position
     if (!skipHighlights) {
-      chart.highlightValue(updatedData[i], SORTED_COLOR);
+      chart.highlightValue(updatedData[currentPosition], SORTED_COLOR);
       await new Promise((resolve) => setTimeout(resolve, 20));
-      chart.unhighlightValue(updatedData[i]);
+      chart.unhighlightValue(updatedData[currentPosition]);
     }
 
     // Delay between iterations
     const delay =
       options.delay ||
-      (updatedData.length > 500 ? 0 : updatedData.length > 200 ? 1 : 20);
+      (updatedData.length > 500 ? 0 : updatedData.length > 200 ? 1 : 25);
     if (delay > 0) {
       await new Promise((resolve) => setTimeout(resolve, delay));
     } else {
@@ -99,13 +134,20 @@ export async function selectionSort(
     }
   }
 
-  // Final element is automatically sorted
   const finalData = chart.getData();
   if (!skipHighlights && finalData.length > 0) {
-    chart.highlightValue(finalData[finalData.length - 1], SORTED_COLOR);
+    chart.highlightValue(finalData[0], SORTED_COLOR);
+
+    if (!skipSounds) {
+      const frequency = chart.playSound(finalData[0], minValue, maxValue);
+    }
+
     await new Promise((resolve) => setTimeout(resolve, 40));
-    chart.unhighlightValue(finalData[finalData.length - 1]);
+    chart.unhighlightValue(finalData[0]);
   }
 
   await chart.verifySorted();
+
+  // return { comparisons };
+  return;
 }

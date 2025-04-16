@@ -1,270 +1,288 @@
 import * as d3 from "d3";
-import { SoundPlayer } from "./SoundPlayer";
+import soundPlayer from "./SoundPlayer";
 
-export class BarChart {
-  private svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>;
-  private container: d3.Selection<HTMLElement, unknown, HTMLElement, any>;
-  private width: number;
-  private height: number;
-  private xScale: d3.ScaleBand<number>;
-  private yScale: d3.ScaleLinear<number, number>;
-  private bars: d3.Selection<SVGRectElement, number, SVGElement, unknown>;
-  private data: number[] = [];
-  private soundPlayer: SoundPlayer = new SoundPlayer();
-  private resizeObserver: ResizeObserver;
-  private highlightedBars: Set<number> = new Set();
+export default function barChart(selector: string) {
+  let svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>;
+  let container: d3.Selection<HTMLElement, unknown, HTMLElement, any>;
+  let width: number;
+  let height: number;
+  let xScale: d3.ScaleBand<number>;
+  let yScale: d3.ScaleLinear<number, number>;
+  let bars: d3.Selection<SVGRectElement, number, SVGElement, unknown>;
+  let data: number[] = [];
+  let resizeObserver: ResizeObserver;
+  let highlightedBars: Set<number> = new Set();
+  let comparisonCount = 0;
 
-  // Color constants
-  private readonly DEFAULT_COLOR = "#4A90E2"; // Original bar color
-  private readonly HIGHLIGHT_COLOR = "#FF5733"; // Highlighted bar color (orange-red)
+  const sound = soundPlayer();
 
-  // Add margin property
-  private margin = { top: 20, right: 20, bottom: 20, left: 20 };
+  function playSound(value: number, minValue: number, maxValue: number) {
+    const frequency = sound.valueToFrequency(value, minValue, maxValue);
+    sound.play(frequency);
+  }
 
-  constructor(selector: string, enableSound: boolean = false) {
-    // Select the container element
-    this.container = d3.select<HTMLElement, unknown>(selector);
+  const DEFAULT_COLOR = "#4A90E2"; // Original bar color
+  const HIGHLIGHT_COLOR = "#FF5733"; // Highlighted bar color (orange-red)
 
-    // Get initial dimensions from the container
-    const containerNode = this.container.node() as HTMLElement;
-    this.width =
-      containerNode.clientWidth - this.margin.left - this.margin.right;
-    this.height =
-      containerNode.clientHeight - this.margin.top - this.margin.bottom;
+  const margin = { top: 10, right: 20, bottom: 10, left: 20 };
 
-    // Initialize sound player if enabled
-    if (enableSound) {
-      this.soundPlayer = new SoundPlayer();
-    }
+  function initialize() {
+    container = d3.select<HTMLElement, unknown>(selector);
 
-    // SVG container with proper dimensions
-    this.svg = this.container
+    const containerNode = container.node() as HTMLElement;
+
+    width = containerNode.clientWidth - margin.left - margin.right;
+    height = containerNode.clientHeight - margin.top - margin.bottom;
+
+    svg = container
       .append("svg")
       .attr("width", "100%")
       .attr("height", "100%")
+      .attr(
+        "viewBox",
+        `0 0 ${containerNode.clientWidth} ${containerNode.clientHeight}`
+      )
+      .attr("preserveAspectRatio", "xMidYMid meet")
       .attr("class", "bg-blue-950")
       .append("g") // Add a group element for proper transformation
-      .attr("transform", `translate(${this.margin.left},${this.margin.top})`);
+      .attr("transform", `translate(${margin.left},${margin.top})`);
 
-    // Scales - adjusted to account for margins
-    this.xScale = d3
-      .scaleBand<number>()
-      .domain([])
-      .range([0, this.width])
-      .padding(0.1);
-    this.yScale = d3.scaleLinear<number, number>().range([this.height, 0]);
+    xScale = d3.scaleBand<number>().domain([]).range([0, width]).padding(0.1);
 
-    // Empty bars
-    this.bars = this.svg.selectAll("rect");
+    yScale = d3.scaleLinear<number, number>().range([height, 0]);
 
-    // Create resize observer
-    this.resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.target === containerNode) {
-          this.resize();
-        }
-      }
+    bars = svg.selectAll("rect");
+
+    resizeObserver = new ResizeObserver(() => {
+      resize();
     });
 
-    // Start observing the container for size changes
-    this.resizeObserver.observe(containerNode);
+    resizeObserver.observe(containerNode);
   }
 
-  resize() {
-    const containerNode = this.container.node() as HTMLElement;
-    const newWidth =
-      containerNode.clientWidth - this.margin.left - this.margin.right;
-    const newHeight =
-      containerNode.clientHeight - this.margin.top - this.margin.bottom;
+  function resize() {
+    const containerNode = container.node() as HTMLElement;
 
-    // Update dimensions
-    this.width = newWidth;
-    this.height = newHeight;
+    const newWidth = containerNode.clientWidth - margin.left - margin.right;
+    const newHeight = containerNode.clientHeight - margin.top - margin.bottom;
 
-    // Update scales
-    this.xScale.range([0, this.width]);
-    this.yScale.range([this.height, 0]);
+    width = newWidth;
+    height = newHeight;
 
-    // Re-render with current data
-    if (this.data.length > 0) {
-      this.updateChart();
+    container
+      .select("svg")
+      .attr(
+        "viewBox",
+        `0 0 ${containerNode.clientWidth} ${containerNode.clientHeight}`
+      );
+
+    xScale.range([0, width]);
+    yScale.range([height, 0]);
+
+    if (data && data.length > 0) {
+      updateChart();
     }
   }
 
-  private updateChart() {
-    this.bars = this.svg
+  function updateChart() {
+    bars = svg
       .selectAll<SVGRectElement, number>("rect")
-      .data(this.data, (d) => d.toString());
+      .data(data, (d) => d.toString());
 
-    this.bars
+    bars
       .enter()
       .append("rect")
       .attr("data-value", (d) => d)
-      .merge(this.bars)
-      .attr("x", (d) => this.xScale(d)!)
-      .attr("y", (d) => this.yScale(d))
-      .attr("width", this.xScale.bandwidth())
-      .attr("height", (d) => this.height - this.yScale(d))
-      .attr("fill", this.DEFAULT_COLOR);
+      .merge(bars)
+      .attr("x", (d) => xScale(d)!)
+      .attr("y", (d) => yScale(d))
+      .attr("width", xScale.bandwidth())
+      .attr("height", (d) => height - yScale(d))
+      .attr("fill", DEFAULT_COLOR);
 
-    this.bars.exit().remove();
+    bars.exit().remove();
   }
 
-  // Method that renders the chart.
-  render(n: number) {
+  // Public API methods
+  const render = (n: number) => {
     if (!Number.isInteger(n) || n <= 0) {
       throw new Error("The input must be a positive integer.");
     }
 
-    this.data = d3.range(1, n + 1);
+    data = d3.range(1, n + 1);
 
-    this.xScale.domain(this.data);
-    this.yScale.domain([0, n]);
+    xScale.domain(data);
+    yScale.domain([0, n]);
 
-    this.updateChart();
-  }
+    updateChart();
+  };
 
-  async shuffle() {
-    const minValue = Math.min(...this.data);
-    const maxValue = Math.max(...this.data);
+  const shuffle = async () => {
+    const minValue = Math.min(...data);
+    const maxValue = Math.max(...data);
 
-    const barsSelection = this.svg.selectAll<SVGRectElement, number>("rect");
+    const barsSelection = svg.selectAll<SVGRectElement, number>("rect");
 
-    const skipHighlights = this.data.length > 500;
+    const skipHighlights = data.length > 500;
 
     // Fisher-Yates Shuffle Algorithm
-    for (let i = this.data.length - 1; i >= 0; i--) {
-      const currentValue = this.data[i];
+    for (let i = data.length - 1; i >= 0; i--) {
+      const currentValue = data[i];
 
       if (!skipHighlights) {
-        this.highlightValue(currentValue);
+        highlightValue(currentValue);
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
 
       // Generate random index and swap
       const j = Math.floor(Math.random() * (i + 1));
-      [this.data[i], this.data[j]] = [this.data[j], this.data[i]];
+      [data[i], data[j]] = [data[j], data[i]];
 
-      this.xScale.domain(this.data);
+      xScale.domain(data);
 
       barsSelection
-        .data(this.data, (d) => d.toString())
+        .data(data, (d) => d.toString())
         .attr("data-value", (d) => d)
-        .attr("x", (d) => this.xScale(d)!)
-        .attr("y", (d) => this.yScale(d))
-        .attr("height", (d) => this.height - this.yScale(d));
+        .attr("x", (d) => xScale(d)!)
+        .attr("y", (d) => yScale(d))
+        .attr("height", (d) => height - yScale(d));
 
-      if (this.soundPlayer && this.data.length <= 200) {
-        const frequency = this.soundPlayer.valueToFrequency(
-          currentValue,
-          minValue,
-          maxValue
-        );
-        this.soundPlayer.play(frequency);
+      if (data.length <= 200) {
+        try {
+          playSound(currentValue, minValue, maxValue);
+        } catch {
+          console.log("Tried to play audio but failed");
+        }
       }
 
       if (!skipHighlights) {
-        this.unhighlightValue(currentValue);
+        unhighlightValue(currentValue);
       }
 
-      const delay =
-        this.data.length > 500 ? 0 : this.data.length > 200 ? 1 : 25;
+      const delay = data.length > 500 ? 0 : data.length > 200 ? 1 : 25;
 
       if (delay > 0) {
         await new Promise((resolve) => setTimeout(resolve, delay));
       } else {
-        // For very large datasets, use requestAnimationFrame to yield to browser
         await new Promise((resolve) => requestAnimationFrame(resolve));
       }
     }
-  }
+  };
 
-  destroy() {
-    if (this.resizeObserver) {
-      this.resizeObserver.disconnect();
+  const destroy = () => {
+    if (resizeObserver) {
+      resizeObserver.disconnect();
     }
-  }
+  };
 
-  getData(): number[] {
-    return [...this.data];
-  }
+  const getData = (): number[] => {
+    return [...data];
+  };
 
-  async swap(i: number, j: number) {
-    if (i < 0 || i >= this.data.length || j < 0 || j >= this.data.length) {
+  const swap = async (i: number, j: number) => {
+    if (i < 0 || i >= data.length || j < 0 || j >= data.length) {
       return;
     }
 
-    const minValue = Math.min(...this.data);
-    const maxValue = Math.max(...this.data);
-    const valueBeingMoved = this.data[j];
+    const minValue = Math.min(...data);
+    const maxValue = Math.max(...data);
+    const valueBeingMoved = data[j];
 
-    [this.data[i], this.data[j]] = [this.data[j], this.data[i]];
+    [data[i], data[j]] = [data[j], data[i]];
 
-    this.xScale.domain(this.data);
+    xScale.domain(data);
 
-    const barsSelection = this.svg.selectAll<SVGRectElement, number>("rect");
+    const barsSelection = svg.selectAll<SVGRectElement, number>("rect");
 
     barsSelection
-      .data(this.data, (d) => d.toString())
+      .data(data, (d) => d.toString())
       .attr("data-value", (d) => d)
-      .attr("x", (d) => this.xScale(d)!)
-      .attr("y", (d) => this.yScale(d))
-      .attr("height", (d) => this.height - this.yScale(d));
+      .attr("x", (d) => xScale(d)!)
+      .attr("y", (d) => yScale(d))
+      .attr("height", (d) => height - yScale(d));
 
-    if (this.soundPlayer && this.data.length <= 200) {
-      const frequency = this.soundPlayer.valueToFrequency(
+    if (sound && data.length <= 200) {
+      const frequency = sound.valueToFrequency(
         valueBeingMoved,
         minValue,
         maxValue
       );
-      this.soundPlayer.play(frequency);
+      sound.play(frequency);
     }
-  }
+  };
 
-  highlightValue(value: number, color: string = this.HIGHLIGHT_COLOR) {
-    this.highlightedBars.add(value);
+  const highlightValue = (value: number, color: string = HIGHLIGHT_COLOR) => {
+    highlightedBars.add(value);
 
-    const bar = this.svg.select(`rect[data-value="${value}"]`);
+    const bar = svg.select(`rect[data-value="${value}"]`);
     if (!bar.empty()) {
-      bar.attr("fill", this.HIGHLIGHT_COLOR);
+      bar.attr("fill", color);
     }
-  }
+  };
 
-  unhighlightValue(value: number) {
-    this.highlightedBars.delete(value);
+  const unhighlightValue = (value: number) => {
+    highlightedBars.delete(value);
 
-    const bar = this.svg.select(`rect[data-value="${value}"]`);
+    const bar = svg.select(`rect[data-value="${value}"]`);
     if (!bar.empty()) {
-      bar.attr("fill", this.DEFAULT_COLOR);
+      bar.attr("fill", DEFAULT_COLOR);
     }
-  }
+  };
 
-  async verifySorted() {
-    const isSorted = this.data.every((val, i, arr) => !i || arr[i - 1] <= val);
+  const resetComparisonCount = () => {
+    comparisonCount = 0;
+    return comparisonCount;
+  };
+
+  const incrementComparisonCount = (amount = 1) => {
+    comparisonCount += amount;
+    return comparisonCount;
+  };
+
+  const getComparisonCount = () => {
+    return comparisonCount;
+  };
+
+  const verifySorted = async () => {
+    const isSorted = data.every((val, i, arr) => !i || arr[i - 1] <= val);
 
     const SUCCESS_COLOR = "#00FF00";
 
-    for (let i = 0; i < this.data.length; i++) {
-      this.highlightValue(this.data[i], SUCCESS_COLOR);
+    for (let i = 0; i < data.length; i++) {
+      highlightValue(data[i], SUCCESS_COLOR);
 
-      if (this.soundPlayer) {
-        const minValue = Math.min(...this.data);
-        const maxValue = Math.max(...this.data);
-        const frequency = this.soundPlayer.valueToFrequency(
-          this.data[i],
-          minValue,
-          maxValue
-        );
-        this.soundPlayer.play(frequency);
+      if (sound) {
+        try {
+          const minValue = Math.min(...data);
+          const maxValue = Math.max(...data);
+          playSound(data[i], minValue, maxValue);
+        } catch {
+          console.log("Tried to play audio but failed");
+        }
       }
 
-      const delay =
-        this.data.length > 500 ? 2 : this.data.length > 200 ? 10 : 20;
+      const delay = data.length > 500 ? 2 : data.length > 200 ? 10 : 20;
       await new Promise((resolve) => setTimeout(resolve, delay));
 
-      this.unhighlightValue(this.data[i]);
+      unhighlightValue(data[i]);
     }
 
     return isSorted;
-  }
+  };
+
+  // Initialize the chart
+  initialize();
+
+  // Return public API
+  return {
+    render,
+    shuffle,
+    destroy,
+    getData,
+    swap,
+    highlightValue,
+    unhighlightValue,
+    verifySorted,
+    playSound,
+  };
 }
