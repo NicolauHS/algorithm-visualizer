@@ -1,5 +1,5 @@
 import * as d3 from "d3";
-import soundPlayer from "./SoundPlayer";
+import soundPlayer from "../../utils/SoundPlayer";
 
 export default function barChart(selector: string) {
   let svg: d3.Selection<SVGGElement, unknown, HTMLElement, any>;
@@ -13,6 +13,11 @@ export default function barChart(selector: string) {
   let resizeObserver: ResizeObserver;
   let highlightedBars: Set<number> = new Set();
   let comparisonCount = 0;
+  let onComparisonUpdate: ((count: number) => void) | null = null;
+
+  const setComparisonUpdateCallback = (callback: (count: number) => void) => {
+    onComparisonUpdate = callback;
+  };
 
   const sound = soundPlayer();
 
@@ -27,7 +32,20 @@ export default function barChart(selector: string) {
   const margin = { top: 10, right: 20, bottom: 10, left: 20 };
 
   function initialize() {
-    container = d3.select<HTMLElement, unknown>(selector);
+    const containerSelection = d3.select(selector);
+    containerSelection.selectAll("svg").remove();
+
+    container = containerSelection as unknown as d3.Selection<
+      HTMLElement,
+      unknown,
+      HTMLElement,
+      any
+    >;
+
+    if (!container.node()) {
+      console.error(`Container not found: ${selector}`);
+      return;
+    }
 
     const containerNode = container.node() as HTMLElement;
 
@@ -173,6 +191,10 @@ export default function barChart(selector: string) {
     if (resizeObserver) {
       resizeObserver.disconnect();
     }
+
+    if (container) {
+      container.selectAll("svg").remove();
+    }
   };
 
   const getData = (): number[] => {
@@ -236,6 +258,10 @@ export default function barChart(selector: string) {
 
   const incrementComparisonCount = (amount = 1) => {
     comparisonCount += amount;
+    if (onComparisonUpdate) {
+      onComparisonUpdate(comparisonCount);
+    }
+
     return comparisonCount;
   };
 
@@ -284,5 +310,9 @@ export default function barChart(selector: string) {
     unhighlightValue,
     verifySorted,
     playSound,
+    resetComparisonCount,
+    incrementComparisonCount,
+    getComparisonCount,
+    setComparisonUpdateCallback,
   };
 }

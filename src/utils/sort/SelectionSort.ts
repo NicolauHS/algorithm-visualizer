@@ -1,4 +1,4 @@
-import barChart from "../BarChart";
+import barChart from "../../app/components/BarChart";
 
 const CURRENT_POSITION_COLOR = "#1E88E5"; // Blue
 const COMPARING_COLOR = "#FFC107"; // Yellow
@@ -18,7 +18,7 @@ export async function selectionSort(
   const minValue = Math.min(...initialData);
   const maxValue = Math.max(...initialData);
 
-  let comparisons = 0;
+  chart.resetComparisonCount();
 
   for (let i = 0; i < chart.getData().length - 1; i++) {
     const currentData = chart.getData();
@@ -51,7 +51,7 @@ export async function selectionSort(
       // Always get fresh data
       const comparisonData = chart.getData();
 
-      comparisons++;
+      chart.incrementComparisonCount();
 
       if (!skipHighlights) {
         chart.highlightValue(comparisonData[j], COMPARING_COLOR);
