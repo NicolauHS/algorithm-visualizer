@@ -31,15 +31,6 @@ export async function selectionSort(
         CURRENT_POSITION_COLOR
       );
 
-      // Play sound for current position
-      if (!skipSounds) {
-        const frequency = chart.playSound(
-          currentData[currentPosition],
-          minValue,
-          maxValue
-        );
-      }
-
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
 
@@ -48,47 +39,40 @@ export async function selectionSort(
 
     // Loop from beginning up to currentPosition (inclusive)
     for (let j = 0; j <= currentPosition; j++) {
-      // Always get fresh data
-      const comparisonData = chart.getData();
-
       chart.incrementComparisonCount();
 
       if (!skipHighlights) {
-        chart.highlightValue(comparisonData[j], COMPARING_COLOR);
+        chart.highlightValue(currentData[j], COMPARING_COLOR);
 
         // Play sound for comparison element
         if (!skipSounds) {
-          const frequency = chart.playSound(
-            comparisonData[j],
-            minValue,
-            maxValue
-          );
+          const frequency = chart.playSound(currentData[j], minValue, maxValue);
         }
       }
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      if (comparisonData[j] > comparisonData[maxIndex]) {
+      if (currentData[j] > currentData[maxIndex]) {
         if (!skipHighlights && maxIndex !== currentPosition) {
-          chart.unhighlightValue(comparisonData[maxIndex]);
+          chart.unhighlightValue(currentData[maxIndex]);
         }
 
         maxIndex = j;
 
         if (!skipSounds) {
           const frequency = chart.playSound(
-            comparisonData[maxIndex],
+            currentData[maxIndex],
             minValue,
             maxValue
           );
         }
       } else if (!skipHighlights) {
-        chart.unhighlightValue(comparisonData[j]);
+        chart.unhighlightValue(currentData[j]);
       }
 
       // Small delay after comparison
       const comparisonDelay =
-        comparisonData.length > 500 ? 0 : comparisonData.length > 200 ? 1 : 5;
+        currentData.length > 500 ? 0 : currentData.length > 200 ? 1 : 5;
       if (comparisonDelay > 0) {
         await new Promise((resolve) => setTimeout(resolve, comparisonDelay));
       }

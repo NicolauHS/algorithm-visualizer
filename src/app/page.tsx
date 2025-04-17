@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import ChartCard from "./components/ChartCard";
-import { selectionSort, quickSort } from "../utils/sort";
+import { selectionSort, quickSort, bubbleSort } from "../utils/sort";
 
 export default function Page() {
   const sortAlgorithms = [
@@ -10,9 +10,20 @@ export default function Page() {
       name: "Selection Sort",
       execute: selectionSort,
     },
+    {
+      name: "Quicksort",
+      execute: quickSort,
+    },
+    {
+      name: "Bubble Sort",
+      execute: bubbleSort,
+    },
   ];
 
-  const [selectedAlgorithm, setSelectedAlgorithm] = useState(sortAlgorithms[0]);
+  const [selectedAlgorithms, setSelectedAlgorithms] = useState<
+    Array<(typeof sortAlgorithms)[0]>
+  >(Array(4).fill(sortAlgorithms[0]));
+
   const [isSorting, setIsSorting] = useState(false);
 
   const [chartCount, setChartCount] = useState(1);
@@ -27,12 +38,16 @@ export default function Page() {
     }
   }, [chartCount]);
 
-  const handleAlgorithmChange = (algorithmName: string) => {
+  const handleAlgorithmChange = (algorithmName: string, chartIndex: number) => {
     const algorithm = sortAlgorithms.find(
       (algo) => algo.name === algorithmName
     );
     if (algorithm) {
-      setSelectedAlgorithm(algorithm);
+      setSelectedAlgorithms((prev) => {
+        const updated = [...prev];
+        updated[chartIndex] = algorithm;
+        return updated;
+      });
     }
   };
 
@@ -63,10 +78,10 @@ export default function Page() {
 
     try {
       await Promise.all(
-        chartRefs.current.map((ref) => {
+        chartRefs.current.map((ref, index) => {
           if (ref) {
             ref.resetComparisonCount();
-            return selectedAlgorithm.execute(ref.getChart());
+            return selectedAlgorithms[index].execute(ref.getChart());
           }
           return Promise.resolve();
         })
@@ -131,9 +146,11 @@ export default function Page() {
           {Array.from({ length: chartCount }).map((_, index) => (
             <ChartCard
               key={index}
-              algorithm={selectedAlgorithm}
+              algorithm={selectedAlgorithms[index]}
               algorithms={sortAlgorithms}
-              onAlgorithmChange={handleAlgorithmChange}
+              onAlgorithmChange={(algorithmName) =>
+                handleAlgorithmChange(algorithmName, index)
+              }
               initialSize={50}
               ref={(el) => (chartRefs.current[index] = el)}
               hideControls={true}

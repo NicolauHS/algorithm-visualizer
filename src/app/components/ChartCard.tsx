@@ -33,7 +33,7 @@ const ChartCard = forwardRef<any, ChartCardProps>(
       algorithm,
       algorithms,
       onAlgorithmChange,
-      initialSize = 50,
+      initialSize = 100,
       hideControls = false,
     },
     ref
